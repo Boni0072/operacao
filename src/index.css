@@ -101,3 +101,57 @@ button, a, input, select, textarea {
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #64748b;
 }
+
+/* ===== Marcadores do mapa de atividades (Leaflet) ===== */
+.activity-marker {
+  background: transparent;
+  border: none;
+}
+
+.am-pin {
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.45);
+  cursor: pointer;
+}
+
+.am-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #fff;
+  opacity: 0.95;
+}
+
+.am-pin.am-pin-late {
+  animation: am-pulse 1.8s ease-out infinite;
+}
+
+@keyframes am-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+/* Leaflet: mantém o mapa legível em segundo plano mesmo em tema escuro */
+.dark .activity-map .leaflet-container {
+  background: #0f172a;
+}
+
+.leaflet-tooltip.activity-marker-tip {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
+  padding: 8px 12px;
+}

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, Badge, Spinner, Select, Modal } from '@/components/ui';
+import { ActivityMap } from '@/components/ActivityMap';
+import { ActivityDetailModal } from '@/components/ActivityDetailModal';
 import { useAuth } from '@/context/AuthContext';
 import {
   ACTIVITY_STATUS_LABELS,
@@ -118,14 +120,6 @@ function formatCompactCurrency(value: number): string {
   return `R$ ${value.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`;
 }
 
-const EXPENSE_META: { key: keyof CostBreakdown; label: string; color: string }[] = [
-  { key: 'combustivel', label: 'Combustível', color: '#3b82f6' },
-  { key: 'refeicao', label: 'Refeições', color: '#f59e0b' },
-  { key: 'deslocamento', label: 'Deslocamento', color: '#8b5cf6' },
-  { key: 'material', label: 'Materiais', color: '#10b981' },
-  { key: 'outro', label: 'Outros', color: '#94a3b8' },
-];
-
 const STATUS_META: { key: 'concluidas' | 'atrasadas' | 'agendadas' | 'pendentes'; label: string; color: string }[] = [
   { key: 'concluidas', label: 'Concluídas', color: '#10b981' },
   { key: 'atrasadas', label: 'Atrasadas', color: '#ef4444' },
@@ -162,6 +156,7 @@ export function ManagementPage({
   const [statusFilter, setStatusFilter] = useState('');
   const [alertModal, setAlertModal] = useState<null | 'late' | 'noEvidence'>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<ActivityWithRelations | null>(null);
 
   const displayProfile = useMemo(() => {
     if (collabFilter) {
@@ -676,27 +671,6 @@ export function ManagementPage({
             </Card>
 
             <Card className="content-card">
-              <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">Distribuição dos Gastos</h2>
-              <div className="flex flex-col items-center gap-5">
-                <ExpenseDonut segments={EXPENSE_META.map((m) => ({ label: m.label, value: costs[m.key], color: m.color }))} total={totalCost} />
-                <div className="w-full space-y-2.5">
-                  {EXPENSE_META.map((m) => (
-                    <div key={m.key} className="flex items-center justify-between gap-3 text-sm">
-                      <span className="flex min-w-0 items-center gap-2.5">
-                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: m.color }} />
-                        <span className="truncate text-slate-600 dark:text-slate-300">{m.label}</span>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-3">
-                        <span className="font-medium text-slate-500 dark:text-slate-400">{totalCost > 0 ? `${Math.round((costs[m.key] / totalCost) * 100)}%` : '–'}</span>
-                        <span className="font-semibold text-slate-900 dark:text-white">{formatCurrency(costs[m.key])}</span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Card>
-
-            <Card className="content-card">
               <h2 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">Status das Atividades</h2>
               <StatusDonutChart counts={statusCounts} />
             </Card>
@@ -797,6 +771,21 @@ export function ManagementPage({
         </div>
       </div>
 
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Mapa de Atividades</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Todas as atividades planejadas, em andamento, concluídas e atrasadas. Clique nos marcadores para ver o detalhamento da atividade e o usuário responsável.
+            </p>
+          </div>
+        </div>
+        <ActivityMap
+          activities={activities}
+          onSelect={(a) => setSelectedActivity(a as ActivityWithRelations)}
+        />
+      </section>
+
       <Modal
         open={alertModal !== null}
         onClose={() => setAlertModal(null)}
@@ -835,6 +824,15 @@ export function ManagementPage({
           </div>
         )}
       </Modal>
+
+      <ActivityDetailModal
+        activity={selectedActivity}
+        onClose={() => setSelectedActivity(null)}
+        onOpen={(id) => {
+          setSelectedActivity(null);
+          onOpenActivity?.(id);
+        }}
+      />
     </div>
   );
 }
