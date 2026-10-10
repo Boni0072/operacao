@@ -4,6 +4,7 @@ import { Card, Badge, Spinner, Select, Modal } from '@/components/ui';
 import { ActivityMap } from '@/components/ActivityMap';
 import { ActivityDetailModal } from '@/components/ActivityDetailModal';
 import { useAuth } from '@/context/AuthContext';
+import { useBranding } from '@/context/BrandingContext';
 import {
   ACTIVITY_STATUS_LABELS,
   ACTIVITY_STATUS_COLORS,
@@ -18,7 +19,7 @@ import { formatCurrency, formatDate, initials } from '@/lib/utils';
 import {
   Fuel, UtensilsCrossed, Truck, Wallet, Calendar, Bell, ChevronDown,
   ChevronRight, ArrowUp, ArrowDown, Minus, Mail, Phone, Zap, MapPin, ClipboardList,
-  Wrench, AlertTriangle, SlidersHorizontal, HardHat, type LucideIcon,
+  Wrench, AlertTriangle, SlidersHorizontal, HardHat, Receipt, Camera, type LucideIcon,
 } from 'lucide-react';
 import type { PageKey } from '@/components/Layout';
 
@@ -32,6 +33,7 @@ interface RecordWithActivity {
   type: string;
   amount: number;
   description: string;
+  receipt_path: string | null;
   created_at: string;
   activity: { id: string; title: string; project: { name: string } | null } | null;
 }
@@ -39,6 +41,21 @@ interface RecordWithActivity {
 type PeriodKey = 'today' | '7d' | '30d' | 'month' | 'all';
 
 type CostBreakdown = { combustivel: number; refeicao: number; deslocamento: number; material: number; outro: number };
+
+/** Tipos de registro (activity_records.type) que compõem cada chave de custo. */
+const COST_TYPE_MAP: Record<keyof CostBreakdown, string[]> = {
+  combustivel: ['fuel', 'combustivel'],
+  refeicao: ['meal', 'refeicao'],
+  deslocamento: ['displacement', 'deslocamento'],
+  material: ['material'],
+  outro: ['expense', 'outro'],
+};
+
+/** Tipos de registro exibidos ao clicar no card de quilometragem. */
+const KM_TYPES = ['displacement', 'deslocamento'];
+
+/** Filtros do modal de detalhamento aberto ao clicar num card. */
+type KpiFilterKey = keyof CostBreakdown | 'total' | 'evidencias' | 'atividades' | 'km' | 'maiorGasto';
 
 const PERIOD_OPTIONS: { value: PeriodKey; label: string }[] = [
   { value: 'today', label: 'Hoje' },
@@ -144,6 +161,7 @@ export function ManagementPage({
   onNavigate?: (page: PageKey) => void;
 }) {
   const { profile } = useAuth();
+  const { logoUrl: brandLogoUrl } = useBranding();
   const [loading, setLoading] = useState(true);
   const [activities, setActivities] = useState<ActivityWithRelations[]>([]);
   const [collaborators, setCollaborators] = useState<Profile[]>([]);
@@ -155,6 +173,7 @@ export function ManagementPage({
   const [collabFilter, setCollabFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [alertModal, setAlertModal] = useState<null | 'late' | 'noEvidence'>(null);
+  const [recordsModal, setRecordsModal] = useState<KpiFilterKey | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<ActivityWithRelations | null>(null);
 
@@ -180,7 +199,7 @@ export function ManagementPage({
         supabase.from('projects').select('*').order('name'),
         supabase
           .from('activity_records')
-          .select('id, type, amount, description, created_at, activity:activities(id, title, project:projects(name))')
+          .select('id, type, amount, description, receipt_path, created_at, activity:activities(id, title, project:projects(name))')
           .order('created_at', { ascending: false }),
       ]);
 
@@ -555,7 +574,19 @@ export function ManagementPage({
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(240px,0.8fr)_minmax(0,2fr)]">
         <Card className="flex min-w-0 flex-col items-center rounded-3xl border-0 bg-slate-900 p-6 text-center text-white dark:bg-slate-800">
           {isConsolidated ? (
-            <img src={'/favicon.svg'} alt="Consolidado" className="h-28 w-28 rounded-3xl bg-white object-contain p-4 ring-4 ring-slate-700/60" />
+            brandLogoUrl ? (
+              <img
+                src={brandLogoUrl}
+                alt="Consolidado"
+                /* altura acompanha a imagem: preenche sem sobra e sem cortar */
+                className="w-28 rounded-3xl bg-white object-contain ring-4 ring-slate-700/60"
+              />
+            ) : (
+              /* mesmo visual do menu lateral quando não há logo personalizado */
+              <div className="flex h-28 w-28 items-center justify-center rounded-3xl bg-amber-500 ring-4 ring-slate-700/60">
+                <HardHat size={56} />
+              </div>
+            )
           ) : avatarUrl ? (
             <img src={avatarUrl} alt={displayProfile?.name ?? 'Avatar'} className="h-28 w-28 rounded-full object-cover ring-4 ring-slate-700/60" />
           ) : (

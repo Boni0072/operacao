@@ -2,8 +2,10 @@ import { ReactNode, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useMaintenance } from '@/context/MaintenanceContext';
 import { useTheme } from '@/context/ThemeContext';
+import { useBranding } from '@/context/BrandingContext';
 import { ROLE_LABELS } from '@/types';
 import { initials } from '@/lib/utils';
+import { BrandLogo } from '@/components/BrandLogo';
 import {
   LayoutDashboard,
   HardHat,
@@ -72,6 +74,7 @@ export function Layout({
   const { profile, signOut } = useAuth();
   const { alertCount: maintenanceAlertCount } = useMaintenance();
   const { theme, toggleTheme } = useTheme();
+  const { name: brandName, subtitle: brandSubtitle } = useBranding();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -79,14 +82,13 @@ export function Layout({
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* Desktop Sidebar */}
       <aside className={`sticky top-0 z-30 hidden h-screen shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-300 dark:border-slate-800 dark:bg-slate-900 lg:flex ${sidebarCollapsed ? 'w-16' : 'w-64'}`}>
-        <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-5`}>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white">
-            <HardHat size={22} />
-          </div>
+        {/* sem px lateral: a imagem ocupa a largura toda do menu */}
+        <div className={`flex flex-col items-center ${sidebarCollapsed ? 'justify-center' : 'gap-2'} py-5`}>
+          <BrandLogo fluid />
           {!sidebarCollapsed && (
-            <div>
-              <p className="text-sm font-bold text-slate-900 dark:text-white">FieldControl</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">Controle de campo</p>
+            <div className="w-full px-3 text-center">
+              <p className="text-sm font-bold text-slate-900 dark:text-white">{brandName}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">{brandSubtitle}</p>
             </div>
           )}
         </div>
@@ -140,11 +142,9 @@ export function Layout({
 
       {/* Mobile Top Bar */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900 lg:hidden">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 text-white">
-            <HardHat size={18} />
-          </div>
-          <span className="text-sm font-bold text-slate-900 dark:text-white">FieldControl</span>
+        <div className="flex flex-col items-center gap-1">
+          <BrandLogo variant="sm" />
+          <span className="text-sm font-bold text-slate-900 dark:text-white">{brandName}</span>
         </div>
         <div className="flex items-center gap-1">
           <button

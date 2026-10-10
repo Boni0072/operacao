@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { BrandingProvider } from '@/context/BrandingContext';
 import { MaintenanceProvider } from '@/context/MaintenanceContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { Layout, type PageKey } from '@/components/Layout';
@@ -74,9 +75,11 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <MaintenanceProvider>
-          <AppContent />
-        </MaintenanceProvider>
+        <BrandingProvider>
+          <MaintenanceProvider>
+            <AppContent />
+          </MaintenanceProvider>
+        </BrandingProvider>
       </AuthProvider>
     </ThemeProvider>
   );
