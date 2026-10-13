@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Expand, Filter, MapPin, Minimize, Users, X, ArrowRight } from 'lucide-react';
+import { AlertTriangle, Calendar, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, Clock3, Expand, Filter, HardHat, Image as ImageIcon, MapPin, Minimize, StickyNote, User, Users, Wrench, X, ArrowRight } from 'lucide-react';
 import { Badge, Button, Spinner } from '@/components/ui';
 import type { Profile, ActivityStatus } from '@/types';
-import { formatCurrency, formatDateTime, initials } from '@/lib/utils';
+import { formatCurrency, formatDateTime, formatDuration, initials } from '@/lib/utils';
 
 type ViewMode = 'day' | 'week';
 
@@ -16,6 +16,13 @@ type ScheduleItem = {
   location: string | null;
   status: ActivityStatus;
   responsible_id: string | null;
+  description: string | null;
+  service_description: string | null;
+  observations: string | null;
+  problems: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  project: { id: string; code: string; name: string; city: string | null; state: string | null } | null;
   responsible: { name: string } | null;
 };
 
@@ -26,6 +33,7 @@ interface ActivityRecord {
   type: ActivityRecordType;
   description: string;
   amount: number;
+  receipt_path: string | null;
   created_at: string | null;
 }
 
@@ -64,6 +72,8 @@ const RECORD_TYPE_COLORS: Record<ActivityRecordType, string> = {
   material: 'bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300',
   expense: 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300',
 };
+
+const RECORD_TYPE_ORDER: ActivityRecordType[] = ['displacement', 'evidence', 'fuel', 'meal', 'material', 'expense'];
 
 function dateKey(date: Date): string {
   const year = date.getFullYear();
@@ -107,6 +117,85 @@ function formatTime(time: string | null): string {
   return time.slice(0, 5);
 }
 
+function formatDateBR(date: string | null): string {
+  if (!date) return 'Não informada';
+  const [year, month, day] = date.split('T')[0].split('-');
+  return `${day}/${month}/${year}`;
+}
+
+function receiptUrl(path: string | null): string | null {
+  if (!path) return null;
+  return supabase.storage.from('receipts').getPublicUrl(path).data.publicUrl;
+}
+
+function DetailSection({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="mb-1.5 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider opacity-60">
+        {icon} {title}
+      </p>
+      <p className="whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-relaxed dark:border-slate-700 dark:bg-slate-800/50">
+        {children}
+      </p>
+    </div>
+  );
+}
+
+function PhotoCard({ record, showType = false }: { record: ActivityRecord; showType?: boolean }) {
+  const url = receiptUrl(record.receipt_path);
+  if (!url) return null;
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/50">
+      {showType && (
+        <div className="px-2.5 pt-2">
+          <Badge className={RECORD_TYPE_COLORS[record.type]}>{RECORD_TYPE_LABELS[record.type]}</Badge>
+        </div>
+      )}
+      <p className={`line-clamp-2 px-2.5 text-xs font-medium leading-snug text-slate-700 dark:text-slate-200 ${showType ? 'pt-1.5' : 'pt-2'}`}>
+        {record.description || 'Sem descrição'}
+      </p>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group relative mt-2 block aspect-[4/3] w-full overflow-hidden bg-slate-100 dark:bg-slate-800"
+        title="Ver foto em tamanho real"
+      >
+        <img
+          src={url}
+          alt={record.description || 'Foto'}
+          loading="lazy"
+          className="h-full w-full object-cover transition group-hover:scale-105"
+        />
+        <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
+          <ImageIcon size={16} className="text-white" />
+        </span>
+      </a>
+      <div className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+        <span className="flex min-w-0 items-center gap-1 truncate">
+          <Clock3 size={10} className="shrink-0" />
+          <span className="truncate">{formatDateTime(record.created_at)}</span>
+        </span>
+        {record.amount > 0 && (
+          <span className="shrink-0 font-medium text-slate-700 dark:text-slate-300">{formatCurrency(record.amount)}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="mt-0.5 text-slate-400 dark:text-slate-500">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-xs text-slate-400 dark:text-slate-500">{label}</p>
+        <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{value}</p>
+      </div>
+    </div>
+  );
+}
+
 export function SchedulePage({ onOpenActivity }: { onOpenActivity?: (id: string) => void }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -134,7 +223,7 @@ export function SchedulePage({ onOpenActivity }: { onOpenActivity?: (id: string)
       const [activityResult, profileResult] = await Promise.all([
         supabase
           .from('activities')
-          .select('id, title, number, planned_date, planned_time, location, status, responsible_id, responsible:profiles(name)')
+          .select('id, title, number, planned_date, planned_time, location, status, responsible_id, description, service_description, observations, problems, started_at, finished_at, project:projects(code, name, city, state), responsible:profiles!activities_responsible_id_fkey(name)')
           .not('planned_date', 'is', null)
           .order('planned_date')
           .order('planned_time'),
@@ -166,9 +255,9 @@ export function SchedulePage({ onOpenActivity }: { onOpenActivity?: (id: string)
       setRecordsError('');
       const { data, error } = await supabase
         .from('activity_records')
-        .select('id, type, description, amount, created_at')
+        .select('id, type, description, amount, receipt_path, created_at')
         .eq('activity_id', selectedItem.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: true });
       if (error) {
         setRecordsError(error.message);
       } else {
@@ -179,6 +268,34 @@ export function SchedulePage({ onOpenActivity }: { onOpenActivity?: (id: string)
 
     void loadRecords();
   }, [selectedItem]);
+
+  // Evidências: registros do tipo "evidence" com foto.
+  const evidenceRecords = useMemo(
+    () => activityRecords.filter((record) => record.type === 'evidence' && record.receipt_path),
+    [activityRecords],
+  );
+  // Fotos: comprovantes de outros tipos (combustível, refeição, material, despesa).
+  const photoRecords = useMemo(
+    () => activityRecords.filter((record) => record.type !== 'evidence' && record.receipt_path),
+    [activityRecords],
+  );
+  const otherRecords = useMemo(
+    () => activityRecords.filter((record) => !record.receipt_path),
+    [activityRecords],
+  );
+
+  // Registros sem foto agrupados por tipo (Deslocamento, Combustível, ...).
+  const recordsByType = useMemo(() => {
+    const groups = new Map<ActivityRecordType, ActivityRecord[]>();
+    for (const record of otherRecords) {
+      const list = groups.get(record.type);
+      if (list) list.push(record);
+      else groups.set(record.type, [record]);
+    }
+    return RECORD_TYPE_ORDER
+      .map((type) => ({ type, records: groups.get(type) ?? [] }))
+      .filter((group) => group.records.length > 0);
+  }, [otherRecords]);
 
   const dates = useMemo(() => {
     if (mode === 'day') return [new Date(date)];
@@ -369,73 +486,130 @@ export function SchedulePage({ onOpenActivity }: { onOpenActivity?: (id: string)
             <button onClick={() => setSelectedItem(null)} className="absolute right-4 top-4 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200" aria-label="Fechar">
               <X size={18} />
             </button>
-            <div className="mb-4">
-              <span className="inline-block rounded-full bg-white/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider dark:bg-black/20">{STATUS_LABELS[selectedItem.status]}</span>
+            {/* Cabeçalho (padrão das atividades) */}
+            <div className="flex items-start justify-between gap-3 pr-8">
+              <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">{selectedItem.number}</span>
+              <Badge className={STATUS_COLORS[selectedItem.status]}>{STATUS_LABELS[selectedItem.status]}</Badge>
             </div>
-            <h3 className="pr-8 text-lg font-bold leading-7">{selectedItem.title}</h3>
-            <p className="mt-1 text-xs font-semibold opacity-60">#{selectedItem.number}</p>
-            <div className="mt-5 space-y-3 text-sm">
-              <div className="flex items-start gap-2.5">
-                <Clock3 size={16} className="mt-0.5 shrink-0 opacity-60" />
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider opacity-50">Horário</p>
-                  <p className="font-medium">{formatTime(selectedItem.planned_time)}</p>
-                </div>
+            <h3 className="mt-3 text-lg font-bold leading-7">{selectedItem.title}</h3>
+            {selectedItem.description && (
+              <p className="mt-1 text-sm opacity-70">{selectedItem.description}</p>
+            )}
+
+            {/* Informações */}
+            <div className="mt-5 grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 sm:divide-x dark:divide-slate-800">
+              <div className="space-y-3 py-4 sm:pr-5">
+                <InfoRow icon={<HardHat size={16} />} label="Obra" value={selectedItem.project?.name ?? '-'} />
+                <InfoRow icon={<Calendar size={16} />} label="Data" value={formatDateBR(selectedItem.planned_date)} />
+                <InfoRow icon={<Clock3 size={16} />} label="Horário" value={formatTime(selectedItem.planned_time)} />
+                <InfoRow icon={<User size={16} />} label="Responsável" value={selectedItem.responsible?.name ?? '-'} />
+                <InfoRow icon={<MapPin size={16} />} label="Endereço" value={selectedItem.location ?? '-'} />
               </div>
-              <div className="flex items-start gap-2.5">
-                <MapPin size={16} className="mt-0.5 shrink-0 opacity-60" />
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider opacity-50">Endereço</p>
-                  <p className="font-medium">{selectedItem.location || 'Não informado'}</p>
-                </div>
+              <div className="space-y-3 py-4 sm:pl-5">
+                <InfoRow icon={<Clock size={16} />} label="Iniciada em" value={formatDateTime(selectedItem.started_at)} />
+                <InfoRow icon={<CheckCircle2 size={16} />} label="Finalizada em" value={formatDateTime(selectedItem.finished_at)} />
+                <InfoRow icon={<Clock size={16} />} label="Duração" value={formatDuration(selectedItem.started_at, selectedItem.finished_at)} />
               </div>
-              {selectedItem.responsible?.name && (
-                <div className="flex items-start gap-2.5">
-                  <Users size={16} className="mt-0.5 shrink-0 opacity-60" />
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider opacity-50">Responsável</p>
-                    <p className="font-medium">{selectedItem.responsible.name}</p>
-                  </div>
-                </div>
+            </div>
+
+            {/* Detalhamento */}
+            <div className="mt-5 space-y-4">
+              {selectedItem.service_description && (
+                <DetailSection icon={<Wrench size={14} />} title="Descrição do serviço">
+                  {selectedItem.service_description}
+                </DetailSection>
+              )}
+              {selectedItem.observations && (
+                <DetailSection icon={<StickyNote size={14} />} title="Observações">
+                  {selectedItem.observations}
+                </DetailSection>
+              )}
+              {selectedItem.problems && (
+                <DetailSection icon={<AlertTriangle size={14} />} title="Problemas">
+                  {selectedItem.problems}
+                </DetailSection>
               )}
             </div>
-          </div>
-        {/* Registros */}
-        {activityRecords.length > 0 && (
-          <div className="mt-5 border-t border-slate-100 pt-5">
+
+        {/* Evidências */}
+        {(evidenceRecords.length > 0 || recordsLoading || recordsError) && (
+          <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-800">
             <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Registros</h4>
-              <span className="text-xs text-slate-500">{activityRecords.length} {activityRecords.length === 1 ? 'registro' : 'registros'}</span>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Evidências</h4>
+              {!recordsLoading && !recordsError && (
+                <span className="text-xs text-slate-500">{evidenceRecords.length} {evidenceRecords.length === 1 ? 'evidência' : 'evidências'}</span>
+              )}
             </div>
             {recordsLoading ? (
               <div className="flex items-center gap-2 text-sm text-slate-500">
                 <Spinner />
-                Carregando registros...
+                Carregando evidências...
               </div>
             ) : recordsError ? (
               <p className="text-sm text-rose-600 dark:text-rose-400">{recordsError}</p>
+            ) : evidenceRecords.length === 0 ? (
+              <p className="text-sm text-slate-400">Nenhuma evidência cadastrada.</p>
             ) : (
-              <div className="space-y-0">
-                {activityRecords.map((record) => (
-                  <div key={record.id} className="flex flex-wrap items-start gap-3 border-b border-slate-100 pb-3 last:border-0">
-                    <div className="mb-1 flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                      <Badge className={RECORD_TYPE_COLORS[record.type]}>{RECORD_TYPE_LABELS[record.type]}</Badge>
-                      <span className="text-xs text-slate-400">{formatDateTime(record.created_at)}</span>
-                    </div>
-                    <p className="min-w-0 flex-1 text-sm text-slate-700 truncate">{record.description || '—'}</p>
-                    {record.amount > 0 && <p className="text-sm font-medium text-slate-900">{formatCurrency(record.amount)}</p>}
-                  </div>
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
+                {evidenceRecords.map((record) => (
+                  <PhotoCard key={record.id} record={record} />
                 ))}
               </div>
             )}
-            {activityRecords.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => onOpenActivity?.(selectedItem.id)} className="mt-3">
-                Ver atividade completa <ArrowRight size={14} />
-              </Button>
-            )}
           </div>
         )}
+
+        {/* Refeição — comprovantes com foto (tipos diferentes de evidência) */}
+        {!recordsLoading && !recordsError && photoRecords.length > 0 && (
+          <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-800">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Refeição</h4>
+              <span className="text-xs text-slate-500">{photoRecords.length} {photoRecords.length === 1 ? 'registro' : 'registros'}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
+              {photoRecords.map((record) => (
+                <PhotoCard key={record.id} record={record} showType />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Demais registros (sem foto) — separados por tipo */}
+        {!recordsLoading && !recordsError && otherRecords.length > 0 && (
+          <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-800">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Registros</h4>
+              <span className="text-xs text-slate-500">{otherRecords.length} {otherRecords.length === 1 ? 'registro' : 'registros'}</span>
+            </div>
+            <div className="space-y-4">
+              {recordsByType.map((group) => (
+                <div key={group.type}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <Badge className={RECORD_TYPE_COLORS[group.type]}>{RECORD_TYPE_LABELS[group.type]}</Badge>
+                    <span className="text-[11px] text-slate-400">{group.records.length} {group.records.length === 1 ? 'registro' : 'registros'}</span>
+                  </div>
+                  <div className="space-y-0">
+                    {group.records.map((record) => (
+                      <div key={record.id} className="flex flex-wrap items-start gap-3 border-b border-slate-100 pb-2.5 last:border-0 dark:border-slate-800">
+                        <span className="min-w-0 flex-1 text-xs text-slate-400">{formatDateTime(record.created_at)}</span>
+                        <p className="min-w-0 flex-[2] text-sm text-slate-700 dark:text-slate-300">{record.description || '—'}</p>
+                        {record.amount > 0 && <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{formatCurrency(record.amount)}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end border-t border-slate-100 pt-4 dark:border-slate-800">
+          <Button variant="secondary" size="sm" onClick={() => onOpenActivity?.(selectedItem.id)}>
+            Ver atividade completa <ArrowRight size={14} />
+          </Button>
         </div>
+        </div>
+      </div>
       )}
     </div>
   );
