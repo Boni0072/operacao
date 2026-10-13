@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { Card, Button, Badge, Spinner, EmptyState, Modal, Textarea, Input } from '@/components/ui';
@@ -56,6 +56,7 @@ const DISPLACEMENT_OPTIONS = [
 export function MyActivityPage({ activityId, onBack }: MyActivityPageProps) {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [activity, setActivity] = useState<(Activity & { project: Project | null; responsible: Profile | null; work_order: WorkOrder | null }) | null>(null);
   const [records, setRecords] = useState<ActivityRecord[]>([]);
   const [finishModalOpen, setFinishModalOpen] = useState(false);
@@ -223,7 +224,7 @@ export function MyActivityPage({ activityId, onBack }: MyActivityPageProps) {
     }
 
     let receiptPath: string | null = null;
-    if (config.hasAmount && amount > 0 && recordFile) {
+    if (recordFile && ((config.hasAmount && amount > 0) || recordModalType === 'evidence')) {
       const ext = recordFile.name.split('.').pop() ?? 'jpg';
       const filePath = `${activityId}/${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
@@ -420,7 +421,7 @@ export function MyActivityPage({ activityId, onBack }: MyActivityPageProps) {
                         className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                       >
                         <Receipt size={12} />
-                        Ver recibo
+                        {r.type === 'evidence' ? 'Ver evidência' : 'Ver recibo'}
                       </a>
                     )}
                     {isActive && profile?.role === 'admin' && (
@@ -575,16 +576,16 @@ export function MyActivityPage({ activityId, onBack }: MyActivityPageProps) {
               placeholder="0,00"
             />
           )}
-          {recordModalType && RECORD_CONFIG[recordModalType].hasAmount && (
+          {recordModalType && recordModalType !== 'displacement' && (
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">
-                Foto do Recibo / Nota Fiscal
+                {recordModalType === 'evidence' ? 'Foto da Evidência' : 'Foto do Recibo / Nota Fiscal'}
               </label>
               {recordPreview ? (
                 <div className="relative inline-block">
                   <img
                     src={recordPreview}
-                    alt="Pré-visualização do recibo"
+                    alt={recordModalType === 'evidence' ? 'Pré-visualização da evidência' : 'Pré-visualização do recibo'}
                     className="h-40 w-auto rounded-lg border border-slate-200 object-cover dark:border-slate-700"
                   />
                   <button
@@ -596,18 +597,29 @@ export function MyActivityPage({ activityId, onBack }: MyActivityPageProps) {
                   </button>
                 </div>
               ) : (
-                <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-slate-300 p-6 text-center transition-colors hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:hover:border-slate-500 dark:hover:bg-slate-800/50">
-                  <Upload size={24} className="text-slate-400 dark:text-slate-500" />
-                  <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Toque para anexar a foto</span>
-                  <span className="text-xs text-slate-400 dark:text-slate-500">JPG, PNG ou WEBP</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                </label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-slate-300 p-5 text-center transition-colors hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:hover:border-slate-500 dark:hover:bg-slate-800/50">
+                    <Upload size={22} className="text-slate-400 dark:text-slate-500" />
+                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{recordModalType === 'evidence' ? 'Anexar foto' : 'Toque para anexar a foto'}</span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">JPG, PNG ou WEBP</span>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex flex-col items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 p-3 text-violet-700 transition-colors hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-400 dark:hover:bg-violet-900/30"
+                  >
+                    <Camera size={20} />
+                    <span className="text-xs font-medium">Tirar foto</span>
+                  </button>
+                </div>
               )}
             </div>
           )}

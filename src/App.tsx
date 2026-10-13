@@ -48,7 +48,7 @@ function AppContent() {
     projects: <ProjectsPage />,
     'work-orders': <WorkOrdersPage />,
     activities: <ActivitiesPage onOpenActivity={openActivity} />,
-    schedule: <SchedulePage />,
+    schedule: <SchedulePage onOpenActivity={openActivity} />,
     clients: <ClientsPage />,
     teams: <TeamsPage />,
     vehicles: <VehiclesPage />,

@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Expand, Filter, MapPin, Minimize, Users, X } from 'lucide-react';
-import { Spinner } from '@/components/ui';
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Expand, Filter, MapPin, Minimize, Users, X, ArrowRight } from 'lucide-react';
+import { Badge, Button, Spinner } from '@/components/ui';
 import type { Profile, ActivityStatus } from '@/types';
-import { initials } from '@/lib/utils';
+import { formatCurrency, formatDateTime, initials } from '@/lib/utils';
 
 type ViewMode = 'day' | 'week';
 
@@ -18,6 +18,16 @@ type ScheduleItem = {
   responsible_id: string | null;
   responsible: { name: string } | null;
 };
+
+type ActivityRecordType = 'displacement' | 'evidence' | 'fuel' | 'meal' | 'material' | 'expense';
+
+interface ActivityRecord {
+  id: string;
+  type: ActivityRecordType;
+  description: string;
+  amount: number;
+  created_at: string | null;
+}
 
 const HOUR_START = 7;
 const HOUR_END = 20;
@@ -35,6 +45,24 @@ const STATUS_LABELS: Record<ActivityStatus, string> = {
   em_andamento: 'Em andamento',
   concluida: 'Concluída',
   cancelada: 'Cancelada',
+};
+
+const RECORD_TYPE_LABELS: Record<ActivityRecordType, string> = {
+  displacement: 'Deslocamento',
+  evidence: 'Evidência',
+  fuel: 'Combustível',
+  meal: 'Refeição',
+  material: 'Material',
+  expense: 'Despesa',
+};
+
+const RECORD_TYPE_COLORS: Record<ActivityRecordType, string> = {
+  displacement: 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300',
+  evidence: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300',
+  fuel: 'bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300',
+  meal: 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+  material: 'bg-orange-50 text-orange-700 dark:bg-orange-950/50 dark:text-orange-300',
+  expense: 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300',
 };
 
 function dateKey(date: Date): string {
@@ -79,7 +107,7 @@ function formatTime(time: string | null): string {
   return time.slice(0, 5);
 }
 
-export function SchedulePage() {
+export function SchedulePage({ onOpenActivity }: { onOpenActivity?: (id: string) => void }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activities, setActivities] = useState<ScheduleItem[]>([]);
@@ -90,6 +118,9 @@ export function SchedulePage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ScheduleItem | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [activityRecords, setActivityRecords] = useState<ActivityRecord[]>([]);
+  const [recordsLoading, setRecordsLoading] = useState(false);
+  const [recordsError, setRecordsError] = useState('');
   const currentTimeLineRef = useRef<HTMLDivElement>(null);
   const scheduleRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => new Date());
@@ -121,6 +152,33 @@ export function SchedulePage() {
 
     void load();
   }, []);
+
+  // Busca os registros cadastrados para a atividade selecionada.
+  useEffect(() => {
+    if (!selectedItem) {
+      setActivityRecords([]);
+      setRecordsError('');
+      return;
+    }
+
+    const loadRecords = async () => {
+      setRecordsLoading(true);
+      setRecordsError('');
+      const { data, error } = await supabase
+        .from('activity_records')
+        .select('id, type, description, amount, created_at')
+        .eq('activity_id', selectedItem.id)
+        .order('created_at', { ascending: false });
+      if (error) {
+        setRecordsError(error.message);
+      } else {
+        setActivityRecords(data as ActivityRecord[]);
+      }
+      setRecordsLoading(false);
+    };
+
+    void loadRecords();
+  }, [selectedItem]);
 
   const dates = useMemo(() => {
     if (mode === 'day') return [new Date(date)];
@@ -307,7 +365,7 @@ export function SchedulePage() {
       {selectedItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setSelectedItem(null)} />
-          <div className={`relative w-full max-w-md rounded-2xl border-l-4 bg-white p-6 shadow-2xl dark:bg-slate-900 ${STATUS_COLORS[selectedItem.status]}`}>
+          <div className={`relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border-l-4 bg-white p-6 shadow-2xl dark:bg-slate-900 ${STATUS_COLORS[selectedItem.status]}`}>
             <button onClick={() => setSelectedItem(null)} className="absolute right-4 top-4 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200" aria-label="Fechar">
               <X size={18} />
             </button>
@@ -342,6 +400,41 @@ export function SchedulePage() {
               )}
             </div>
           </div>
+        {/* Registros */}
+        {activityRecords.length > 0 && (
+          <div className="mt-5 border-t border-slate-100 pt-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Registros</h4>
+              <span className="text-xs text-slate-500">{activityRecords.length} {activityRecords.length === 1 ? 'registro' : 'registros'}</span>
+            </div>
+            {recordsLoading ? (
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <Spinner />
+                Carregando registros...
+              </div>
+            ) : recordsError ? (
+              <p className="text-sm text-rose-600 dark:text-rose-400">{recordsError}</p>
+            ) : (
+              <div className="space-y-0">
+                {activityRecords.map((record) => (
+                  <div key={record.id} className="flex flex-wrap items-start gap-3 border-b border-slate-100 pb-3 last:border-0">
+                    <div className="mb-1 flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                      <Badge className={RECORD_TYPE_COLORS[record.type]}>{RECORD_TYPE_LABELS[record.type]}</Badge>
+                      <span className="text-xs text-slate-400">{formatDateTime(record.created_at)}</span>
+                    </div>
+                    <p className="min-w-0 flex-1 text-sm text-slate-700 truncate">{record.description || '—'}</p>
+                    {record.amount > 0 && <p className="text-sm font-medium text-slate-900">{formatCurrency(record.amount)}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {activityRecords.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => onOpenActivity?.(selectedItem.id)} className="mt-3">
+                Ver atividade completa <ArrowRight size={14} />
+              </Button>
+            )}
+          </div>
+        )}
         </div>
       )}
     </div>
