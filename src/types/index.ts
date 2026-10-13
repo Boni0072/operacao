@@ -8,6 +8,8 @@ export interface Profile {
   phone: string | null;
   avatar_url: string | null;
   active: boolean;
+  /** Páginas liberadas (chaves de navegação). NULL ou vazio = todas. */
+  allowed_pages: string[] | null;
   maintenance_alert_threshold: number;
   created_at: string;
   updated_at: string;

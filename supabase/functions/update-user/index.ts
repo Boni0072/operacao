@@ -84,6 +84,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const validPages = ["dashboard", "management", "projects", "work-orders", "activities", "schedule", "clients", "teams", "vehicles", "users", "settings"];
+    const requestedPages = Array.isArray(body?.allowed_pages) ? body.allowed_pages : [];
+    const allowedPages = [
+      ...new Set(
+        requestedPages
+          .map((page: unknown) => String(page))
+          .filter((page: string) => validPages.includes(page)),
+      ),
+    ];
+
     if (avatar) {
       const avatarType = String(avatar.type ?? "");
       const avatarData = String(avatar.data ?? "");
@@ -127,7 +137,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const updateData: Record<string, unknown> = { name, role, phone, active };
+    const updateData: Record<string, unknown> = { name, role, phone, active, allowed_pages: allowedPages.length > 0 ? allowedPages : null };
     if (avatarPath !== undefined) {
       updateData.avatar_url = avatarPath;
     }

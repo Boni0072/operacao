@@ -4,6 +4,7 @@ import {
   Card, Badge, Button, Input, Select, Modal, Spinner, EmptyState,
 } from '@/components/ui';
 import { ROLE_LABELS, type Profile, type UserRole } from '@/types';
+import { PAGE_OPTIONS } from '@/components/Layout';
 import { initials } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { UserPlus, Users, Upload, X, Pencil } from 'lucide-react';
@@ -30,13 +31,13 @@ export function UsersPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', role: 'tecnico', phone: '', active: true });
+  const [editForm, setEditForm] = useState({ name: '', role: 'tecnico', phone: '', active: true, allowedPages: [] as string[] });
   const [editAvatarFile, setEditAvatarFile] = useState<AvatarFile>(null);
   const [editAvatarPreview, setEditAvatarPreview] = useState<string | null>(null);
   const [editAvatarRemoved, setEditAvatarRemoved] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'tecnico', phone: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'tecnico', phone: '', allowedPages: [] as string[] });
   const [avatarFile, setAvatarFile] = useState<AvatarFile>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState('');
@@ -77,7 +78,7 @@ export function UsersPage() {
   }, [profiles]);
 
   const resetForm = () => {
-    setForm({ name: '', email: '', password: '', role: 'tecnico', phone: '' });
+    setForm({ name: '', email: '', password: '', role: 'tecnico', phone: '', allowedPages: [] });
     setAvatarFile(null);
     setAvatarPreview(null);
     setAvatarError('');
@@ -137,6 +138,7 @@ export function UsersPage() {
           role: form.role,
           phone: form.phone.trim() || null,
           avatar: avatarFile,
+          allowed_pages: form.allowedPages,
         }),
       });
 
@@ -159,7 +161,7 @@ export function UsersPage() {
   };
 
   const resetEditForm = () => {
-    setEditForm({ name: '', role: 'tecnico', phone: '', active: true });
+    setEditForm({ name: '', role: 'tecnico', phone: '', active: true, allowedPages: [] });
     setEditAvatarFile(null);
     setEditAvatarPreview(null);
     setEditAvatarRemoved(false);
@@ -168,7 +170,7 @@ export function UsersPage() {
 
   const openEdit = (p: Profile) => {
     setEditingUser(p);
-    setEditForm({ name: p.name, role: p.role, phone: p.phone ?? '', active: p.active });
+    setEditForm({ name: p.name, role: p.role, phone: p.phone ?? '', active: p.active, allowedPages: p.allowed_pages ?? [] });
     setEditAvatarPreview(avatarUrls[p.avatar_url ?? ''] ?? null);
     setEditAvatarFile(null);
     setEditAvatarRemoved(false);
@@ -232,6 +234,7 @@ export function UsersPage() {
           active: editForm.active,
           avatar: editAvatarFile,
           removeAvatar: editAvatarRemoved,
+          allowed_pages: editForm.allowedPages,
         }),
       });
 
@@ -372,6 +375,10 @@ export function UsersPage() {
             options={ROLE_OPTIONS}
             required
           />
+          <PagesAccessField
+            value={form.allowedPages}
+            onChange={(allowedPages) => setForm((f) => ({ ...f, allowedPages }))}
+          />
           <Input
             label="Telefone (opcional)"
             value={form.phone}
@@ -438,6 +445,10 @@ export function UsersPage() {
               options={ROLE_OPTIONS}
               required
             />
+            <PagesAccessField
+              value={editForm.allowedPages}
+              onChange={(allowedPages) => setEditForm((f) => ({ ...f, allowedPages }))}
+            />
             <Input
               label="Telefone (opcional)"
               value={editForm.phone}
@@ -465,6 +476,57 @@ export function UsersPage() {
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+function PagesAccessField({ value, onChange }: { value: string[]; onChange: (pages: string[]) => void }) {
+  const allSelected = value.length === PAGE_OPTIONS.length;
+
+  const togglePage = (key: string) => {
+    onChange(value.includes(key) ? value.filter((page) => page !== key) : [...value, key]);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+          Páginas com acesso
+        </p>
+        <button
+          type="button"
+          onClick={() => onChange(allSelected ? [] : PAGE_OPTIONS.map((option) => option.value))}
+          className="text-xs font-semibold text-amber-600 transition hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+        >
+          {allSelected ? 'Limpar seleção' : 'Selecionar todas'}
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {PAGE_OPTIONS.map((option) => {
+          const checked = value.includes(option.value);
+          return (
+            <label
+              key={option.value}
+              className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                checked
+                  ? 'border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-300'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-slate-600'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => togglePage(option.value)}
+                className="h-4 w-4 shrink-0 rounded border-slate-300 text-amber-500 focus:ring-amber-400 dark:border-slate-600 dark:bg-slate-800"
+              />
+              <span className="truncate">{option.label}</span>
+            </label>
+          );
+        })}
+      </div>
+      <p className="text-xs text-slate-400 dark:text-slate-500">
+        Nenhuma página selecionada libera todas. Administradores sempre têm acesso total.
+      </p>
     </div>
   );
 }

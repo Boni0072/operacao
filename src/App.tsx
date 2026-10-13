@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { BrandingProvider } from '@/context/BrandingContext';
 import { MaintenanceProvider } from '@/context/MaintenanceContext';
 import { ThemeProvider } from '@/context/ThemeContext';
-import { Layout, type PageKey } from '@/components/Layout';
+import { Layout, PAGE_OPTIONS, type PageKey } from '@/components/Layout';
 import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ProjectsPage } from '@/pages/ProjectsPage';
@@ -20,9 +20,27 @@ import { SchedulePage } from '@/pages/SchedulePage';
 import { Spinner } from '@/components/ui';
 
 function AppContent() {
-  const { session, loading } = useAuth();
+  const { session, loading, profile } = useAuth();
   const [page, setPage] = useState<PageKey>('dashboard');
   const [activityDetailId, setActivityDetailId] = useState<string | null>(null);
+
+  // Páginas liberadas para o perfil (NULL/vazio = todas; admin vê tudo).
+  const allowedPageSet = useMemo(() => {
+    if (!profile || profile.role === 'admin') return null;
+    const pages = (profile.allowed_pages ?? []) as PageKey[];
+    return pages.length > 0 ? new Set(pages) : null;
+  }, [profile]);
+
+  const fallbackPage: PageKey = useMemo(() => {
+    if (!allowedPageSet) return 'dashboard';
+    return PAGE_OPTIONS.find((option) => allowedPageSet.has(option.value))?.value ?? 'dashboard';
+  }, [allowedPageSet]);
+
+  const currentPage: PageKey = allowedPageSet && !allowedPageSet.has(page) ? fallbackPage : page;
+
+  useEffect(() => {
+    if (currentPage !== page) setPage(currentPage);
+  }, [currentPage, page]);
 
   if (loading) {
     return (
@@ -65,8 +83,8 @@ function AppContent() {
   }
 
   return (
-    <Layout current={page} onNavigate={setPage}>
-      {pages[page]}
+    <Layout current={currentPage} onNavigate={setPage}>
+      {pages[currentPage]}
     </Layout>
   );
 }

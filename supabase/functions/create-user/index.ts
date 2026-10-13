@@ -90,6 +90,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const validPages = ["dashboard", "management", "projects", "work-orders", "activities", "schedule", "clients", "teams", "vehicles", "users", "settings"];
+    const requestedPages = Array.isArray(body?.allowed_pages) ? body.allowed_pages : [];
+    const allowedPages = [
+      ...new Set(
+        requestedPages
+          .map((page: unknown) => String(page))
+          .filter((page: string) => validPages.includes(page)),
+      ),
+    ];
+
     if (avatar) {
       const avatarType = String(avatar.type ?? "");
       const avatarData = String(avatar.data ?? "");
@@ -153,6 +163,7 @@ Deno.serve(async (req: Request) => {
           phone,
           avatar_url: avatarPath,
           active: true,
+          allowed_pages: allowedPages.length > 0 ? allowedPages : null,
         });
 
       if (profileInsertError) {

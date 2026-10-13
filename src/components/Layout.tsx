@@ -62,6 +62,9 @@ const NAV_ITEMS: NavItem[] = [
 
 const MOBILE_NAV: PageKey[] = ['dashboard', 'management', 'activities', 'work-orders'];
 
+/** Opções de páginas para o seletor de acesso (mesma ordem/labels do menu). */
+export const PAGE_OPTIONS: { value: PageKey; label: string }[] = NAV_ITEMS.map(({ key, label }) => ({ value: key, label }));
+
 export function Layout({
   current,
   onNavigate,
@@ -78,6 +81,14 @@ export function Layout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // Páginas liberadas para o perfil atual (NULL/vazio = todas; admin vê tudo).
+  const allowedPageSet: Set<PageKey> | null =
+    profile && profile.role !== 'admin' && Array.isArray(profile.allowed_pages) && profile.allowed_pages.length > 0
+      ? new Set(profile.allowed_pages as PageKey[])
+      : null;
+  const visibleNavItems = allowedPageSet ? NAV_ITEMS.filter((item) => allowedPageSet.has(item.key)) : NAV_ITEMS;
+  const visibleMobileNav = allowedPageSet ? MOBILE_NAV.filter((key) => allowedPageSet.has(key)) : MOBILE_NAV;
+
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* Desktop Sidebar */}
@@ -93,7 +104,7 @@ export function Layout({
           )}
         </div>
         <nav className="flex-1 space-y-1 px-3 py-2">
-          {NAV_ITEMS.map((item) => (
+          {visibleNavItems.map((item) => (
             <button
               key={item.key}
               onClick={() => onNavigate(item.key)}
@@ -183,7 +194,7 @@ export function Layout({
               </button>
             </div>
             <nav className="space-y-1 px-3 py-2">
-              {NAV_ITEMS.map((item) => (
+              {visibleNavItems.map((item) => (
                 <button
                   key={item.key}
                   onClick={() => { onNavigate(item.key); setMobileMenuOpen(false); }}
@@ -256,7 +267,7 @@ export function Layout({
 
       {/* Mobile Bottom Nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-30 flex border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 lg:hidden">
-        {MOBILE_NAV.map((key) => {
+        {visibleMobileNav.map((key) => {
           const item = NAV_ITEMS.find((n) => n.key === key)!;
           return (
             <button
