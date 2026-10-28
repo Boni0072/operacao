@@ -465,7 +465,7 @@ export function SchedulePage({ onOpenActivity }: { onOpenActivity?: (id: string)
               <div
                 ref={currentTimeLineRef}
                 className="pointer-events-none absolute z-10"
-                style={{ top: `${currentTimeLine.offsetPx}px`, left: 68, right: 0 }}
+                style={{ top: `${currentTimeLine.offsetPx}px`, left: 64, right: 0 }}
               >
                 <span className="absolute -top-6 left-0 -translate-x-1/2 rounded bg-red-500 px-1.5 py-0.5 text-[9px] font-bold text-white whitespace-nowrap">
                   {currentTimeLine.label}
